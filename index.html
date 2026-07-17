@@ -8,6 +8,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
   :root{
     --navy:#002364; --navy-light:#7B8CB0; --cyan:#00B4AA;
@@ -399,6 +402,21 @@
       </div>
       <div class="insight">📈 O funil mostra volume e conversão juntos: dos 1.096 inscritos, 46,0% avançam até virar engajados — e desses, 33,3% seguem até concluir. Uma base grande sustentando um funil consistente do início ao fim.</div>
       <button class="dl-btn" onclick="baixarFunil()">Baixar imagem (.png)</button>
+    </div>
+  </div>
+
+  <div class="grid wide">
+    <div class="card">
+      <h3>15 · Mapa de calor de engajamento por escola</h3>
+      <p class="sub">Intensidade = taxa de ativação de cada escola · localização real das 8 escolas participantes no Distrito Federal</p>
+      <div id="mapaCalor" style="width:100%;height:420px;border-radius:8px;overflow:hidden;"></div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--cyan);"></span>Baixo engajamento</span>
+        <span><span class="dot" style="background:var(--orange);"></span>Médio</span>
+        <span><span class="dot" style="background:var(--magenta);"></span>Alto engajamento</span>
+      </div>
+      <div class="insight">📈 O ponto mais "quente" do mapa é CED 104 Recanto das Emas (88,9%) — mas o achado mais interessante é que CEMI Taguatinga (70,6%) e Cemab (2,1%) ficam a poucos minutos de distância uma da outra, em polos opostos do mapa de calor. Isso sugere que o engajamento depende mais da mobilização de cada escola do que da região onde ela está.</div>
+      <div class="note">Passe o mouse sobre os pontos brancos pra ver o nome da escola, taxa de ativação e nº de inscritos. Sem botão de baixar aqui: mapas interativos com camadas de tile externas não exportam bem pra PNG — se precisar da imagem estática, um print de tela funciona melhor.</div>
     </div>
   </div>
 </section>
@@ -947,12 +965,78 @@ function baixarEstrutura(){
   );
 }
 
+let mapaCalorInstance = null;
+
+function initMapaCalor(){
+  if (mapaCalorInstance) {
+    setTimeout(function(){ mapaCalorInstance.invalidateSize(); }, 50);
+    return;
+  }
+
+  const mapaDiv = document.getElementById('mapaCalor');
+  if (typeof L === 'undefined' || typeof L.heatLayer === 'undefined') {
+    mapaDiv.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6B7280;font-size:12.5px;text-align:center;padding:20px;">Não foi possível carregar a biblioteca do mapa (Leaflet). Verifique sua conexão e recarregue a página.</div>';
+    return;
+  }
+
+  const escolas = [
+    {nome:'CED 104 Recanto das Emas', lat:-15.9006715, lng:-48.0715538, ativacao:88.9, inscritos:189},
+    {nome:'CEMI Taguatinga', lat:-15.8043094, lng:-48.1002538, ativacao:70.6, inscritos:102},
+    {nome:'CED 01 ITAPOÃ', lat:-15.7505399, lng:-47.7614468, ativacao:64.4, inscritos:270},
+    {nome:'CED Jardins Mangueiral', lat:-15.8903233, lng:-47.811984, ativacao:49.1, inscritos:116},
+    {nome:'CED Incra 08', lat:-15.7435291, lng:-48.1701137, ativacao:35.5, inscritos:76},
+    {nome:'CED Pompílio Marques de Souza', lat:-15.5990458, lng:-47.6829676, ativacao:6.2, inscritos:48},
+    {nome:'Cemab', lat:-15.8363812, lng:-48.0539054, ativacao:2.1, inscritos:143},
+    {nome:'CEM 03 Ceilândia', lat:-15.8264226, lng:-48.0964692, ativacao:0.0, inscritos:151}
+  ];
+
+  mapaCalorInstance = L.map('mapaCalor', { scrollWheelZoom:false }).setView([-15.82, -47.95], 10);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19
+  }).addTo(mapaCalorInstance);
+
+  const heatData = escolas.map(function(e){ return [e.lat, e.lng, e.ativacao / 100]; });
+
+  L.heatLayer(heatData, {
+    radius: 45,
+    blur: 30,
+    maxZoom: 12,
+    minOpacity: 0.3,
+    max: 1,
+    gradient: {
+      0.0: '#00B4AA',
+      0.35: '#00B4AA',
+      0.55: '#F08203',
+      0.8: '#FD0087',
+      1.0: '#B3001B'
+    }
+  }).addTo(mapaCalorInstance);
+
+  escolas.forEach(function(e){
+    L.circleMarker([e.lat, e.lng], {
+      radius: 5,
+      color: '#002364',
+      weight: 2,
+      fillColor: '#fff',
+      fillOpacity: 1
+    })
+    .bindTooltip(
+      '<strong>' + e.nome + '</strong><br>Ativação: ' + e.ativacao.toLocaleString('pt-BR',{minimumFractionDigits:1}) + '%<br>Inscritos: ' + e.inscritos,
+      { direction: 'top', offset: [0,-6] }
+    )
+    .addTo(mapaCalorInstance);
+  });
+}
+
 document.querySelectorAll('.tab-btn').forEach(function(btn){
   btn.addEventListener('click', function(){
     document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
     document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
     btn.classList.add('active');
     document.getElementById(btn.dataset.page).classList.add('active');
+    if (btn.dataset.page === 'p4') { initMapaCalor(); }
   });
 });
 </script>
